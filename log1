@@ -1,0 +1,36 @@
+ubuntu@ip-172-31-1-58:~/dir1$ python routine.py
+charlist 33
+max_len 247
+char count 33
+Train Loss: 347.13  Progress: 0%
+Train Loss: 159.46  Progress: 24%
+Train Loss: 121.06  Progress: 49%
+Train Loss: 118.68  Progress: 74%
+Train Loss: 97.92  Progress: 99%
+### Epoch 0 Loss: 147.6991 ###
+Train Loss: 97.56  Progress: 0%
+Train Loss: 63.70  Progress: 24%
+Train Loss: 41.92  Progress: 49%
+Train Loss: 40.87  Progress: 74%
+
+Train Loss: 33.42  Progress: 99%
+### Epoch 1 Loss: 48.6482 ###
+Train Loss: 26.37  Progress: 0%
+Train Loss: 24.93  Progress: 24%
+Train Loss: 20.61  Progress: 49%
+Train Loss: 27.75  Progress: 74%
+Train Loss: 18.63  Progress: 99%
+### Epoch 2 Loss: 25.9801 ###
+Train Loss: 17.75  Progress: 0%
+Train Loss: 15.88  Progress: 24%
+Train Loss: 25.77  Progress: 49%
+Train Loss: 17.21  Progress: 74%
+Train Loss: 20.17  Progress: 99%
+### Epoch 3 Loss: 19.5298 ###
+Train Loss: 16.85  Progress: 0%
+
+Train Loss: 14.30  Progress: 24%
+Train Loss: 14.53  Progress: 49%
+Train Loss: 13.42  Progress: 74%
+Train Loss: 13.67  Progress: 99%
+### Epoch 4 Loss: 16.1751 ###
