@@ -66,7 +66,7 @@ class Encoder(nn.Module):
 # - The results of the query and the LSTM state are passed into a single hidden layer MLP for the character projection
 # - The last layer of the character projection and the embedding layer have tied weights
 class Decoder(nn.Module):
-    def __init__(self, char_count, hidden_dim, attention_dim, tf_rate):
+    def __init__(self, char_count, hidden_dim, attention_dim):
         # assert speller_hidden_dim == listener_hidden_dim
         super(Decoder, self).__init__()
         concat_dim = hidden_dim + attention_dim
@@ -91,14 +91,12 @@ class Decoder(nn.Module):
         self.char_count = char_count
 
         # initial states
-        self.h00 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.h01 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.h02 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.c00 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.c01 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.c02 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-
-        self.tf_rate = tf_rate
+        self.h00 = nn.Parameter(torch.zeros(1, hidden_dim))
+        self.h01 = nn.Parameter(torch.zeros(1, hidden_dim))
+        self.h02 = nn.Parameter(torch.zeros(1, hidden_dim))
+        self.c00 = nn.Parameter(torch.zeros(1, hidden_dim))
+        self.c01 = nn.Parameter(torch.zeros(1, hidden_dim))
+        self.c02 = nn.Parameter(torch.zeros(1, hidden_dim))
 
     # listener_feature (N, T, 256)
     # Yinput (N, L )
@@ -132,7 +130,7 @@ class Decoder(nn.Module):
         for step in range(max_len):
 
             # 0.9 prob to feed the ground truth as input
-            teacher_force = True if np.random.random_sample() < self.tf_rate else False
+            teacher_force = True if np.random.random_sample() < 0.9 else False
 
             # label_embedding from Y input or previous prediction
             if training and teacher_force:
@@ -214,13 +212,8 @@ class Attention(nn.Module):
         attention = self.softmax(energy)  # (N,1,L)
 
         # mask attention todo: correct???
-        # print('=== Attention ===')
-        # print(attention)
         attention = attention * attention_mask
         attention = attention / torch.sum(attention, dim=-1).unsqueeze(2)  # (N,1,L) / (N, 1, 1) = (N,1,L)
-
-        # print('=== Attention after mask and renormalization ===')
-        # print(attention)
 
         context = torch.bmm(attention, value)  # (N, 1, B)
         context = context.squeeze(dim=1)  # (N, B)

@@ -6,8 +6,7 @@ import torch.utils.data
 from torch import nn
 import os
 from torch.autograd import Variable
-import Levenshtein as L
-import math
+
 
 data_path = './'
 
@@ -30,22 +29,7 @@ def to_variable(tensor):
     return torch.autograd.Variable(tensor)
 
 
-def weights_init(layer):
-    class_name = layer.__class__.__name__
-    range = 0.1
-    if class_name == 'LSTM':
-        print(class_name)
-        # Initialize LSTM weights
-        # range = 1.0 / math.sqrt(hidden_dim)
-        torch.nn.init.uniform(layer.weight_ih_l0, -range, range)
-        torch.nn.init.uniform(layer.weight_hh_l0, -range, range)
-    elif class_name == 'LSTMCell':
-        print(class_name)
-        torch.nn.init.uniform(layer.weight_ih, -range, range)
-        torch.nn.init.uniform(layer.weight_hh, -range, range)
-
-
-def train_model(batch_size, epochs, learn_rate, name, tf_rate, listener_state, speller_state):
+def train_model(batch_size, epochs, learn_rate, name, listener_state, speller_state):
 
     charmap, charlist = char_map(data_path + 'train_transcripts.npy')
     print('char count', len(charlist))
@@ -55,20 +39,12 @@ def train_model(batch_size, epochs, learn_rate, name, tf_rate, listener_state, s
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size,
                                                    shuffle=True, collate_fn=my_collate)
 
-    dev_dataset = MyDataset('dev', charmap)
-    dev_dataloader = torch.utils.data.DataLoader(dev_dataset, batch_size=1,
-                                                   shuffle=False, collate_fn=my_collate)
-
     test_dataset = TestDataset()
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=False)
 
     # Create the LAS network
-    listener = model.Encoder(input_dim=40, hidden_dim=256, attention_dim=128)
-    speller = model.Decoder(char_count, hidden_dim=256, attention_dim=128, tf_rate=tf_rate)
-
-    # Initialize weights
-    listener.apply(weights_init)
-    speller.apply(weights_init)
+    listener = model.Encoder(input_dim=40, hidden_dim=256)
+    speller = model.Decoder(char_count, hidden_dim=256, attention_dim=128)
 
     # [optional] load state dicts
     if listener_state and speller_state:
@@ -77,9 +53,10 @@ def train_model(batch_size, epochs, learn_rate, name, tf_rate, listener_state, s
 
     loss_fn = nn.CrossEntropyLoss(reduce=False)
 
+    # todo: correct??
     LAS_params = list(listener.parameters()) + list(speller.parameters())
-    optim = torch.optim.Adam(LAS_params, lr=learn_rate, weight_decay=1e-4) # todo: change back to 1e-5
-    scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=3, gamma=0.6)
+    optim = torch.optim.Adam(LAS_params, lr=learn_rate, weight_decay=1e-5)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=2, gamma=0.8)
 
     if torch.cuda.is_available():
         # Move the network and the optimizer to the GPU
@@ -95,7 +72,7 @@ def train_model(batch_size, epochs, learn_rate, name, tf_rate, listener_state, s
         total = len(train_dataset) / batch_size
         interval = total // 10
 
-        scheduler.step()
+        # scheduler.step()
 
         for (utterance, frame_lens, Yinput, Ytarget, transcript_lens) in train_dataloader:
 
@@ -104,8 +81,8 @@ def train_model(batch_size, epochs, learn_rate, name, tf_rate, listener_state, s
             optim.zero_grad()  # Reset the gradients
 
             # forward
-            key, value = listener(to_variable(utterance), frame_lens)
-            pred_seq = speller(key, value, to_variable(Yinput), Yinput.size(-1), True, frame_lens)
+            listener_feature = listener(to_variable(utterance), frame_lens)
+            pred_seq = speller(listener_feature, to_variable(Yinput), Yinput.size(-1), True, frame_lens)
             # print('pred_seq', pred_seq.size())  # B, L, 33
             # print('Ytarget', Ytarget.size())  # B, L
 
@@ -143,25 +120,6 @@ def train_model(batch_size, epochs, learn_rate, name, tf_rate, listener_state, s
         torch.save(listener.state_dict(), '%s-listener-e%d' % (name, epoch))
         torch.save(speller.state_dict(), '%s-speller-e%d' % (name, epoch))
 
-        # # validation
-        edit_distances = []
-        for (utterance, frame_lens, Yinput, Ytarget, transcript_lens) in dev_dataloader:
-
-            actual_batch_size = len(frame_lens)
-            count += 1
-            assert actual_batch_size == 1
-
-            # forward
-            key, value = listener(to_variable(utterance), frame_lens)
-            pred_seq = speller(key, value, to_variable(Yinput), Yinput.size(-1), False, frame_lens)  # input prev pred
-            prediction = torch.max(pred_seq, dim=2)[1]
-
-            edit_distance = compare(charlist, prediction.cpu().data.numpy(), Ytarget.numpy())
-            edit_distances.append(edit_distance)
-            # print(edit_distance)
-
-        print("Epoch {} validation edit distance: {:.4f}".format(epoch, np.asscalar(np.mean(edit_distances))))
-
     # test
     index = 0
     fout = open(name+'.csv', 'w')
@@ -171,8 +129,8 @@ def train_model(batch_size, epochs, learn_rate, name, tf_rate, listener_state, s
         # print('Yinput', Yinput.size())
 
         # forward
-        key, value = listener(to_variable(utterance), frame_lens.numpy().tolist())
-        pred_seq = speller(key, value, None, None, False, frame_lens.numpy().tolist())
+        listener_feature = listener(to_variable(utterance), frame_lens.numpy().tolist())
+        pred_seq = speller(listener_feature, None, None, False, frame_lens.numpy().tolist())
         pred_seq = pred_seq.cpu().data.numpy()  # B, L, 33
 
         for b in range(pred_seq.shape[0]):
@@ -184,24 +142,6 @@ def train_model(batch_size, epochs, learn_rate, name, tf_rate, listener_state, s
             index += 1
 
 
-def compare(label_map, pred, target):
-    pred_list = pred[0]
-    target_list = target[0]
-
-    pred_sent = ""
-    for character in pred_list:
-        if character == 0:
-            break
-        pred_sent += label_map[character]
-
-    target_sent = ""
-    for character in target_list:
-        if character == 0:
-            break
-        target_sent += label_map[character]
-
-    return float(L.distance(pred_sent, target_sent))
-
 import sys
 
 listener_state = None
@@ -211,19 +151,12 @@ if len(sys.argv) == 3:
     listener_state = sys.argv[1]
     speller_state = sys.argv[2]
 
-train_model(batch_size=32, epochs=15, learn_rate=1e-3, name='try11', tf_rate=0.9,
+train_model(batch_size=32, epochs=10, learn_rate=1e-4, name='try3br',
             listener_state=listener_state, speller_state=speller_state)
 
 '''
-try2: added attention masking => overfit after epoch 5, best score 23
+try2: overfit after epoch 5, best score 23
 try3: added teacher force 0.9
 try4: initialize 3 differnent initial states for decoder lstm cells => loss pattern no change 
-try5: move key/val computation out of attention => no change 
-try8: teacher force 0.6, lr decay => not as good as 0.5
---- removed first 40 duplicates from dev --- 
-try9: add init to lstm weights => no change
-try10:try teacher force rate 0.4
-try10r: learn_rate=5e-5, tf_rate=0.3
-try10r2: learn_rate=5e-5, tf_rate=0.3, from epoch9, weight decay 1e-4
-try11: xavier_uniform init LSTMCell states
+try5: move key/val computation out of attention
 '''

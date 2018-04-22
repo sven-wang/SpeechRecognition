@@ -35,15 +35,12 @@ class pBLSTM(nn.Module):
 # **Encoder**
 # is a BiLSTM followed by 3 pyramid BiLSTMs. Each has 256 hidden dimensions per direction.
 class Encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, attention_dim):
+    def __init__(self, input_dim, hidden_dim):
         super(Encoder, self).__init__()
         self.BLSTM = nn.LSTM(input_size=input_dim, hidden_size=hidden_dim, bidirectional=True, batch_first=True)
         self.pBLSTM1 = pBLSTM(hidden_dim * 2, hidden_dim)
         self.pBLSTM2 = pBLSTM(hidden_dim * 2, hidden_dim)
         self.pBLSTM3 = pBLSTM(hidden_dim * 2, hidden_dim)
-
-        self.key_linear = nn.Linear(hidden_dim * 2, attention_dim)  # output from bLSTM
-        self.value_linear = nn.Linear(hidden_dim * 2, attention_dim)  # output from bLSTM
 
     def forward(self, input, frame_lens):
         input = pack_padded_sequence(input, frame_lens, batch_first=True)
@@ -52,10 +49,7 @@ class Encoder(nn.Module):
         output, h = self.pBLSTM2(output)
         output, h = self.pBLSTM3(output)
         output, _ = pad_packed_sequence(output, batch_first=True)
-
-        key = ApplyPerTime(self.key_linear, output).transpose(1, 2)
-        value = ApplyPerTime(self.value_linear, output)  # (N, L, 128)
-        return key, value
+        return output
 
 
 # **Decoder**
@@ -66,7 +60,7 @@ class Encoder(nn.Module):
 # - The results of the query and the LSTM state are passed into a single hidden layer MLP for the character projection
 # - The last layer of the character projection and the embedding layer have tied weights
 class Decoder(nn.Module):
-    def __init__(self, char_count, hidden_dim, attention_dim, tf_rate):
+    def __init__(self, char_count, hidden_dim, attention_dim):
         # assert speller_hidden_dim == listener_hidden_dim
         super(Decoder, self).__init__()
         concat_dim = hidden_dim + attention_dim
@@ -91,18 +85,31 @@ class Decoder(nn.Module):
         self.char_count = char_count
 
         # initial states
-        self.h00 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.h01 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.h02 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.c00 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.c01 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
-        self.c02 = nn.Parameter(nn.init.xavier_uniform(torch.Tensor(1, self.hidden_dim).type(torch.FloatTensor)), requires_grad=True)
+        self.h0 = nn.Parameter(torch.zeros(1, hidden_dim))
+        self.c0 = nn.Parameter(torch.zeros(1, hidden_dim))
 
-        self.tf_rate = tf_rate
+    def forward_step(self, concat, listener_feature, prev_h, prev_c, attention_mask):
+
+        # (h1_1, c1_1) = nn.LSTMCell_1 (input_1, (h0_1, c0_1))
+        # (h1_2, c1_2) = nn.LSTMCell_2 (input_2, (h0_2, c0_2))
+        # (h1_3, c1_3) = nn.LSTMCell_3 (input_3, (h0_3, c0_3)) so input_2 = h1_1? input_3 = h1_2?
+
+        h1, c1 = self.cell1(concat, (prev_h[0], prev_c[0]))
+        h2, c2 = self.cell2(h1, (prev_h[1], prev_c[1]))
+        h3, c3 = self.cell3(h2, (prev_h[2], prev_c[2]))
+
+        attention, context = self.attention(listener_feature, h3, attention_mask)
+        concat = torch.cat([h3, context], dim=1)  # (N, speller_dim + values_dim)
+
+        projection = self.character_projection(self.relu(self.mlp(concat)))
+        pred = self.softmax(projection)  # todo: remove??
+        # print('### pred', pred.size())
+
+        return pred, context, attention, (h1, h2, h3), (c1, c2, c3)
 
     # listener_feature (N, T, 256)
     # Yinput (N, L )
-    def forward(self, key, value, Yinput, max_len, training, frame_lens):
+    def forward(self, listener_feature, Yinput, max_len, training, frame_lens):
 
         # Create a binary mask for attention (N, L/8)
         frame_lens = np.array(frame_lens) // 8
@@ -112,16 +119,14 @@ class Decoder(nn.Module):
         attention_mask = to_variable(to_tensor(attention_mask))
 
         # INITIALIZATION
-        batch_size = key.size()[0]  # train: N; test: 1
+        batch_size = listener_feature.size()[0]  # train: N; test: 1
 
-        _, context = self.attention(key, value, self.h02.expand(batch_size, self.hidden_dim).contiguous(), attention_mask)
+        # TODO: try initialize three different h,c states ???
+        h0_expanded = self.h0.expand(batch_size, self.hidden_dim).contiguous()
+        _, context = self.attention(listener_feature, h0_expanded, attention_mask)
         # common initial hidden and cell states for LSTM cells
-        prev_h = (self.h00.expand(batch_size, self.hidden_dim).contiguous(),
-                  self.h01.expand(batch_size, self.hidden_dim).contiguous(),
-                  self.h02.expand(batch_size, self.hidden_dim).contiguous())
-        prev_c = (self.c00.expand(batch_size, self.hidden_dim).contiguous(),
-                  self.c01.expand(batch_size, self.hidden_dim).contiguous(),
-                  self.c02.expand(batch_size, self.hidden_dim).contiguous())
+        prev_h = [h0_expanded] * 3
+        prev_c = [self.c0.expand(batch_size, self.hidden_dim).contiguous()] * 3
 
         pred_seq = None
         pred_idx = to_variable(torch.zeros(batch_size).long())  # size [N] batch size = 1 for test
@@ -132,7 +137,7 @@ class Decoder(nn.Module):
         for step in range(max_len):
 
             # 0.9 prob to feed the ground truth as input
-            teacher_force = True if np.random.random_sample() < self.tf_rate else False
+            teacher_force = True if np.random.random_sample() < 0.9 else False
 
             # label_embedding from Y input or previous prediction
             if training and teacher_force:
@@ -143,7 +148,7 @@ class Decoder(nn.Module):
 
             rnn_input = torch.cat([label_embedding, context], dim=-1)
             pred, context, attention, prev_h, prev_c = \
-                self.forward_step(rnn_input, key, value, prev_h, prev_c, attention_mask)
+                self.forward_step(rnn_input, listener_feature, prev_h, prev_c, attention_mask)
             pred = pred.unsqueeze(1)
 
             # debug
@@ -161,21 +166,6 @@ class Decoder(nn.Module):
                 pred_seq = torch.cat([pred_seq, pred], dim=1)
 
         return pred_seq
-
-    def forward_step(self, concat, key, value, prev_h, prev_c, attention_mask):
-
-        h1, c1 = self.cell1(concat, (prev_h[0], prev_c[0]))
-        h2, c2 = self.cell2(h1, (prev_h[1], prev_c[1]))
-        h3, c3 = self.cell3(h2, (prev_h[2], prev_c[2]))
-
-        attention, context = self.attention(key, value, h3, attention_mask)
-        concat = torch.cat([h3, context], dim=1)  # (N, speller_dim + values_dim)
-
-        projection = self.character_projection(self.relu(self.mlp(concat)))
-        pred = self.softmax(projection)  # todo: remove??
-        # print('### pred', pred.size())
-
-        return pred, context, attention, (h1, h2, h3), (c1, c2, c3)
 
 
 # helper function for
@@ -206,21 +196,20 @@ class Attention(nn.Module):
         # self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=-1)  # along the time dimension, which is the last one
         self.query_linear = nn.Linear(hidden_dim, A)
+        self.key_linear = nn.Linear(hidden_dim * 2, A)  # output from bLSTM
+        self.value_linear = nn.Linear(hidden_dim * 2, A)  # output from bLSTM
 
-    def forward(self, key, value, decoder_state, attention_mask):
+    def forward(self, encoder_feature, decoder_state, attention_mask):
 
+        key = ApplyPerTime(self.key_linear, encoder_feature).transpose(1, 2)
+        value = ApplyPerTime(self.value_linear, encoder_feature)  # (N, L, 128)
         query = self.query_linear(decoder_state).unsqueeze(1)  # query (N, A) => (N, 1, A)
         energy = torch.bmm(query, key)  # (N,1,L)
         attention = self.softmax(energy)  # (N,1,L)
 
         # mask attention todo: correct???
-        # print('=== Attention ===')
-        # print(attention)
         attention = attention * attention_mask
         attention = attention / torch.sum(attention, dim=-1).unsqueeze(2)  # (N,1,L) / (N, 1, 1) = (N,1,L)
-
-        # print('=== Attention after mask and renormalization ===')
-        # print(attention)
 
         context = torch.bmm(attention, value)  # (N, 1, B)
         context = context.squeeze(dim=1)  # (N, B)

@@ -78,7 +78,7 @@ def train_model(batch_size, epochs, learn_rate, name, tf_rate, listener_state, s
     loss_fn = nn.CrossEntropyLoss(reduce=False)
 
     LAS_params = list(listener.parameters()) + list(speller.parameters())
-    optim = torch.optim.Adam(LAS_params, lr=learn_rate, weight_decay=1e-4) # todo: change back to 1e-5
+    optim = torch.optim.Adam(LAS_params, lr=learn_rate, weight_decay=1e-5)
     scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=3, gamma=0.6)
 
     if torch.cuda.is_available():
@@ -211,7 +211,7 @@ if len(sys.argv) == 3:
     listener_state = sys.argv[1]
     speller_state = sys.argv[2]
 
-train_model(batch_size=32, epochs=15, learn_rate=1e-3, name='try11', tf_rate=0.9,
+train_model(batch_size=32, epochs=0, learn_rate=1e-3, name='try9', tf_rate=0.4,
             listener_state=listener_state, speller_state=speller_state)
 
 '''
@@ -220,10 +220,7 @@ try3: added teacher force 0.9
 try4: initialize 3 differnent initial states for decoder lstm cells => loss pattern no change 
 try5: move key/val computation out of attention => no change 
 try8: teacher force 0.6, lr decay => not as good as 0.5
---- removed first 40 duplicates from dev --- 
 try9: add init to lstm weights => no change
 try10:try teacher force rate 0.4
-try10r: learn_rate=5e-5, tf_rate=0.3
-try10r2: learn_rate=5e-5, tf_rate=0.3, from epoch9, weight decay 1e-4
-try11: xavier_uniform init LSTMCell states
+
 '''

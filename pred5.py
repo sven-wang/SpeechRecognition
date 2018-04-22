@@ -72,7 +72,7 @@ def train_model(batch_size, epochs, learn_rate, name, listener_state, speller_st
         # print('Yinput', Yinput.size())
 
         # forward
-        key, value = listener(to_variable(utterance), frame_lens.numpy().tolist())
+        key, value, = listener(to_variable(utterance), frame_lens.numpy().tolist())
         pred_seq = speller(key, value, None, None, False, frame_lens.numpy().tolist())
         pred_seq = pred_seq.cpu().data.numpy()  # B, L, 33
 
@@ -85,7 +85,6 @@ def train_model(batch_size, epochs, learn_rate, name, listener_state, speller_st
             index += 1
 
 
-
 listener_state = None
 speller_state = None
 
@@ -93,5 +92,5 @@ if len(sys.argv) == 3:
     listener_state = sys.argv[1]
     speller_state = sys.argv[2]
 
-train_model(batch_size=1, epochs=0, learn_rate=1e-3, name='try6',
+train_model(batch_size=1, epochs=0, learn_rate=1e-3, name='try5',
             listener_state=listener_state, speller_state=speller_state)

@@ -1,0 +1,85 @@
+ubuntu@ip-172-31-1-58:~$ cat log3
+charlist 33
+max_len 247
+char count 33
+Train Loss: 323.47  Progress: 0%
+Train Loss: 250.96  Progress: 9%
+Train Loss: 198.38  Progress: 19%
+Train Loss: 177.64  Progress: 29%
+Train Loss: 155.01  Progress: 39%
+Train Loss: 157.13  Progress: 49%
+Train Loss: 149.57  Progress: 59%
+Train Loss: 131.87  Progress: 69%
+Train Loss: 149.44  Progress: 79%
+Train Loss: 102.82  Progress: 89%
+Train Loss: 87.63  Progress: 99%
+### Epoch 0 Loss: 162.7475 ###
+Train Loss: 92.69  Progress: 0%
+Train Loss: 82.24  Progress: 9%
+Train Loss: 53.14  Progress: 19%
+Train Loss: 53.40  Progress: 29%
+Train Loss: 54.71  Progress: 39%
+Train Loss: 46.65  Progress: 49%
+Train Loss: 51.71  Progress: 59%
+Train Loss: 44.05  Progress: 69%
+Train Loss: 38.34  Progress: 79%
+Train Loss: 35.31  Progress: 89%
+Train Loss: 33.31  Progress: 99%
+### Epoch 1 Loss: 53.0169 ###
+Train Loss: 34.74  Progress: 0%
+Train Loss: 32.25  Progress: 9%
+Train Loss: 25.14  Progress: 19%
+Train Loss: 36.11  Progress: 29%
+Train Loss: 33.81  Progress: 39%
+Train Loss: 37.25  Progress: 49%
+Train Loss: 28.69  Progress: 59%
+Train Loss: 34.59  Progress: 69%
+Train Loss: 27.98  Progress: 79%
+Train Loss: 28.23  Progress: 89%
+Train Loss: 29.65  Progress: 99%
+### Epoch 2 Loss: 32.4924 ###
+Train Loss: 15.39  Progress: 0%
+Train Loss: 30.19  Progress: 9%
+Train Loss: 19.33  Progress: 19%
+Train Loss: 20.64  Progress: 29%
+Train Loss: 26.59  Progress: 39%
+Train Loss: 19.71  Progress: 49%
+Train Loss: 20.30  Progress: 59%
+Train Loss: 18.15  Progress: 69%
+Train Loss: 30.88  Progress: 79%
+Train Loss: 25.08  Progress: 89%
+Train Loss: 16.76  Progress: 99%
+### Epoch 3 Loss: 25.4199 ###
+Train Loss: 22.93  Progress: 0%
+Train Loss: 20.10  Progress: 9%
+Train Loss: 24.31  Progress: 19%
+Train Loss: 20.03  Progress: 29%
+Train Loss: 17.82  Progress: 39%
+Train Loss: 21.82  Progress: 49%
+Train Loss: 21.53  Progress: 59%
+Train Loss: 12.97  Progress: 69%
+Train Loss: 24.36  Progress: 79%
+Train Loss: 22.07  Progress: 89%
+Train Loss: 13.95  Progress: 99%
+### Epoch 4 Loss: 21.5374 ###
+Train Loss: 25.97  Progress: 0%
+Train Loss: 20.54  Progress: 9%
+Train Loss: 17.97  Progress: 19%
+Train Loss: 17.04  Progress: 29%
+Train Loss: 17.24  Progress: 39%
+Train Loss: 16.84  Progress: 49%
+Train Loss: 15.76  Progress: 59%
+Train Loss: 19.42  Progress: 69%
+Train Loss: 12.43  Progress: 79%
+Train Loss: 40.93  Progress: 89%
+Train Loss: 16.10  Progress: 99%
+### Epoch 5 Loss: 18.9677 ###
+Train Loss: 15.72  Progress: 0%
+Train Loss: 14.83  Progress: 9%
+Train Loss: 19.24  Progress: 19%
+Train Loss: 20.01  Progress: 29%
+Train Loss: 15.84  Progress: 39%
+Train Loss: 19.78  Progress: 49%
+Train Loss: 18.50  Progress: 59%
+Train Loss: 13.62  Progress: 69%
+ubuntu@ip-172-31-1-58:~$
